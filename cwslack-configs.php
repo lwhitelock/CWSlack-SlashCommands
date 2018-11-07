@@ -1,7 +1,7 @@
 <?php
 /*
 	CWSlack-SlashCommands
-    Copyright (C) 2016  jundis
+    Copyright (C) 2018  jundis
 
     This program is free software: you can redistribute it and/or modify
     it under the terms of the GNU General Public License as published by
@@ -23,10 +23,10 @@ header('Content-Type: application/json'); //Set the header to return JSON, requi
 require_once 'config.php'; //Require config
 require_once 'functions.php'; //Require functions
 
-if(empty($_GET['token']) || ($_GET['token'] != $slackconfigstoken)) die("Slack token invalid."); //If Slack token is not correct, kill the connection. This allows only Slack to access the page for security purposes.
-if(empty($_GET['text'])) die("No text provided."); //If there is no text added, kill the connection.
+if(empty($_REQUEST['token']) || ($_REQUEST['token'] != $slackconfigstoken)) die("Slack token invalid."); //If Slack token is not correct, kill the connection. This allows only Slack to access the page for security purposes.
+if(empty($_REQUEST['text'])) die("No text provided."); //If there is no text added, kill the connection.
 
-$exploded = explode("|",$_GET['text']); //Explode the string attached to the slash command for use in variables.
+$exploded = explode("|",$_REQUEST['text']); //Explode the string attached to the slash command for use in variables.
 
 //Check to see if the first command in the text array is actually help, if so redirect to help webpage detailing slash command use.
 if ($exploded[0]=="help") {
@@ -46,7 +46,7 @@ if($timeoutfix == true)
     flush();
     session_write_close();
     if($sendtimeoutwait==true) {
-        cURLPost($_GET["response_url"], array("Content-Type: application/json"), "POST", array("parse" => "full", "response_type" => "ephemeral", "text" => "Please wait..."));
+        cURLPost($_REQUEST["response_url"], array("Content-Type: application/json"), "POST", array("parse" => "full", "response_type" => "ephemeral", "text" => "Please wait..."));
     }
 }
 //End timeout fix block
@@ -86,7 +86,7 @@ $dataTData = cURL($url, $header_data); // Get the JSON returned by the CW API.
 if($dataTData==NULL) //If no contact is returned or your API URL is incorrect.
 {
     if ($timeoutfix == true) {
-        cURLPost($_GET["response_url"], array("Content-Type: application/json"), "POST", array("parse" => "full", "response_type" => "ephemeral","text" => "No configuration found."));
+        cURLPost($_REQUEST["response_url"], array("Content-Type: application/json"), "POST", array("parse" => "full", "response_type" => "ephemeral","text" => "No configuration found."));
     } else {
         die("No configuration found."); //Return properly encoded arrays in JSON for Slack parsing.
     }
@@ -95,53 +95,92 @@ if($dataTData==NULL) //If no contact is returned or your API URL is incorrect.
 
 $return="Nothing!"; //Create return value and set to a basic message just in case.
 $conf = $dataTData[0]; //Shortcut to item.
-$questions = $conf->questions; //Array of questions
 $notes = "None"; //Just in case
 $vendornotes = "None"; //Just in case
 $answers = ""; //Nothing just in case
 
-if($questions!=NULL)
+if(array_key_exists("questions",$conf))
 {
-	foreach($questions as $q) //For each item in the Question array
-	{
-		if($q->answer!=NULL) //If the answer exists and is not just blank and useless.
-		{
-		    if(strpos($q->question,"Password") !== false && $hidepasswords == 1) //If question contains "Password".
+    $questions = $conf->questions; //Array of questions
+    if($questions!=NULL)
+    {
+        foreach($questions as $q) //For each item in the Question array
+        {
+            if($q->answer!=NULL) //If the answer exists and is not just blank and useless.
             {
+                if(strpos($q->question,"Password") !== false && $hidepasswords == 1) //If question contains "Password".
+                {
 
-                if (strpos($q->question, ":") !== false) //If question contains a colon.
-                {
-                    $answers = $answers . $q->question . " Hidden, please view in CW\n"; //Return the question, answer, and new line.
+                    if (strpos($q->question, ":") !== false) //If question contains a colon.
+                    {
+                        $answers = $answers . $q->question . " Hidden, please view in CW\n"; //Return the question, answer, and new line.
+                    }
+                    else //Else, add a colon.
+                    {
+                        $answers = $answers . $q->question . ": Hidden, please view in CW\n"; //Return the question, answer, and new line.
+                    }
                 }
-                else //Else, add a colon.
+                else
                 {
-                    $answers = $answers . $q->question . ": Hidden, please view in CW\n"; //Return the question, answer, and new line.
+                    if (strpos($q->question, ":") !== false) //If question contains a colon.
+                    {
+                        $answers = $answers . $q->question . " " . $q->answer . "\n"; //Return the question, answer, and new line.
+                    }
+                    else //Else, add a colon.
+                    {
+                        $answers = $answers . $q->question . ": " . $q->answer . "\n"; //Return the question, answer, and new line.
+                    }
                 }
             }
-            else
+        }
+    }
+}
+else if(array_key_exists("customFields",$conf))
+{
+    $questions = $conf->customFields; //Array of questions
+    if($questions!=NULL)
+    {
+        foreach($questions as $q) //For each item in the Question array
+        {
+            if(array_key_exists("value",$q) && $q->value!=NULL) //If the answer exists and is not just blank and useless.
             {
-                if (strpos($q->question, ":") !== false) //If question contains a colon.
+                if(strpos($q->caption,"Password") !== false && $hidepasswords == 1) //If question contains "Password".
                 {
-                    $answers = $answers . $q->question . " " . $q->answer . "\n"; //Return the question, answer, and new line.
+
+                    if (strpos($q->caption, ":") !== false) //If question contains a colon.
+                    {
+                        $answers = $answers . $q->caption . " Hidden, please view in CW\n"; //Return the question, answer, and new line.
+                    }
+                    else //Else, add a colon.
+                    {
+                        $answers = $answers . $q->caption . ": Hidden, please view in CW\n"; //Return the question, answer, and new line.
+                    }
                 }
-                else //Else, add a colon.
+                else
                 {
-                    $answers = $answers . $q->question . ": " . $q->answer . "\n"; //Return the question, answer, and new line.
+                    if (strpos($q->caption, ":") !== false) //If question contains a colon.
+                    {
+                        $answers = $answers . $q->caption . " " . $q->value . "\n"; //Return the question, answer, and new line.
+                    }
+                    else //Else, add a colon.
+                    {
+                        $answers = $answers . $q->caption . ": " . $q->value . "\n"; //Return the question, answer, and new line.
+                    }
                 }
             }
-		}
-	}
+        }
+    }
 }
 else
 {
 	$answers="None";
 }
 
-if($conf->notes!=NULL) //If notes are not null
+if(array_key_exists("notes",$conf) && $conf->notes!=NULL) //If notes are not null
 {
     $notes = $conf->notes; //Set $notes to the config notes
 }
-if($conf->vendorNotes!=NULL) //If vendornotes are not null
+if(array_key_exists("vendorNotes",$conf) && $conf->vendorNotes!=NULL) //If vendornotes are not null
 {
     $vendornotes = $conf->vendorNotes; //Set $vendornotes to the config vendor notes.
 }
@@ -162,7 +201,7 @@ $return =array(
 );
 
 if ($timeoutfix == true) {
-    cURLPost($_GET["response_url"], array("Content-Type: application/json"), "POST", $return);
+    cURLPost($_REQUEST["response_url"], array("Content-Type: application/json"), "POST", $return);
 } else {
     die(json_encode($return, JSON_PRETTY_PRINT)); //Return properly encoded arrays in JSON for Slack parsing.
 }

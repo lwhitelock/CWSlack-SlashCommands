@@ -1,7 +1,7 @@
 <?php
 /*
 	CWSlack-SlashCommands
-    Copyright (C) 2016  jundis
+    Copyright (C) 2018  jundis
 
     This program is free software: you can redistribute it and/or modify
     it under the terms of the GNU General Public License as published by
@@ -55,7 +55,7 @@ function cURL($url, $header)
 
     $jsonDecode = json_decode($curlBodyTData); //Decode the JSON returned by the CW API.
 
-    if(array_key_exists("code",$jsonDecode)) { //Check if array contains error code
+    if(is_array($jsonDecode) && array_key_exists("code",$jsonDecode)) { //Check if array contains error code
         if($jsonDecode->code == "NotFound") { //If error code is NotFound
             die("Connectwise record was not found."); //Report that the ticket was not found.
         }
@@ -66,7 +66,7 @@ function cURL($url, $header)
             die("Unknown Error Occurred, check API key and other API settings. Error " . $jsonDecode->code . ": " . $jsonDecode->message); //Fail case, including the message and code output from connectwise.
         }
     }
-    if(array_key_exists("errors",$jsonDecode)) //If connectwise returned an error.
+    if(is_array($jsonDecode) && array_key_exists("errors",$jsonDecode)) //If connectwise returned an error.
     {
         $errors = $jsonDecode->errors; //Make array easier to access.
 
@@ -122,12 +122,16 @@ function cURLPost($url, $header, $request, $postfieldspre)
     }
     $jsonDecode = json_decode($curlBodyTCmd); //Decode the JSON returned by the CW API.
 
-    if(array_key_exists("code",$jsonDecode)) { //Check if array contains error code
+    if(is_array($jsonDecode) && array_key_exists("code",$jsonDecode)) { //Check if array contains error code
         if($jsonDecode->code == "NotFound") { //If error code is NotFound
             die("Connectwise record was not found."); //Report that the ticket was not found.
         }
         else if($jsonDecode->code == "Unauthorized") { //If error code is an authorization error
             die("401 Unauthorized, check API key to ensure it is valid."); //Fail case.
+        }
+        else if($jsonDecode->code == "InvalidObject" && $jsonDecode->message == "schedule object is invalid")
+        {
+            die("Error: " . $jsonDecode->errors->message . " - Please check to ensure you have this user mapped in the database using /dbm, as their name most likely differs between Slack and ConnectWise");
         }
         else if($jsonDecode->code == NULL)
         {
@@ -137,7 +141,7 @@ function cURLPost($url, $header, $request, $postfieldspre)
             die("Unknown Error Occurred, check API key and other API settings. Error " . $jsonDecode->code . ": " . $jsonDecode->message); //Fail case.
         }
     }
-    if(array_key_exists("errors",$jsonDecode)) //If connectwise returned an error.
+    if(is_array($jsonDecode) && array_key_exists("errors",$jsonDecode)) //If connectwise returned an error.
     {
         $errors = $jsonDecode->errors; //Make array easier to access.
 

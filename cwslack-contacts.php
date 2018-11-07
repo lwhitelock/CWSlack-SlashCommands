@@ -1,7 +1,7 @@
 <?php
 /* 	
 	CWSlack-SlashCommands
-    Copyright (C) 2016  jundis
+    Copyright (C) 2018  jundis
 
     This program is free software: you can redistribute it and/or modify
     it under the terms of the GNU General Public License as published by
@@ -23,10 +23,10 @@ header('Content-Type: application/json'); //Set the header to return JSON, requi
 require_once 'config.php';
 require_once 'functions.php';
 
-if(empty($_GET['token']) || ($_GET['token'] != $slackcontactstoken)) die("Slack token invalid."); //If Slack token is not correct, kill the connection. This allows only Slack to access the page for security purposes.
-if(empty($_GET['text'])) die("No text provided."); //If there is no text added, kill the connection.
+if(empty($_REQUEST['token']) || ($_REQUEST['token'] != $slackcontactstoken)) die("Slack token invalid."); //If Slack token is not correct, kill the connection. This allows only Slack to access the page for security purposes.
+if(empty($_REQUEST['text'])) die("No text provided."); //If there is no text added, kill the connection.
 
-$exploded = explode(" ",$_GET['text']); //Explode the string attached to the slash command for use in variables.
+$exploded = explode(" ",$_REQUEST['text']); //Explode the string attached to the slash command for use in variables.
 
 //Check to see if the first command in the text array is actually help, if so redirect to help webpage detailing slash command use.
 if ($exploded[0]=="help") {
@@ -46,7 +46,7 @@ if($timeoutfix == true)
     flush();
     session_write_close();
     if($sendtimeoutwait==true) {
-        cURLPost($_GET["response_url"], array("Content-Type: application/json"), "POST", array("parse" => "full", "response_type" => "ephemeral", "text" => "Please wait..."));
+        cURLPost($_REQUEST["response_url"], array("Content-Type: application/json"), "POST", array("parse" => "full", "response_type" => "ephemeral", "text" => "Please wait..."));
     }
 }
 //End timeout fix block
@@ -58,14 +58,14 @@ $url=NULL; //Create a URL variable and set it to Null.
 if (array_key_exists(0,$exploded)) //If the first part of the array exists (always will)
 {
 	$lastname = $exploded[0];
-	$url = $connectwise . "/$connectwisebranch/apis/3.0/company/contacts?conditions=inactiveFlag=" . ($inactivecontacts ? "True" : "False") . "%20and%20lastName%20like%20%27" . $lastname . "%27"; //Set contact API url
+	$url = $connectwise . "/$connectwisebranch/apis/3.0/company/contacts?conditions=inactiveFlag=" . ($inactivecontacts ? "True" : "False") . "%20and%20lastName%20contains%20%27" . $lastname . "%27"; //Set contact API url
 }
 if (array_key_exists(1,$exploded)) //If two parts of the array exists
 {
 	$lastname = $exploded[1]; //Set the second portion to last name
 	$firstname = $exploded[0]; //Set the first portion to first name
 	
-	$url = $connectwise . "/$connectwisebranch/apis/3.0/company/contacts?conditions=inactiveFlag=" . ($inactivecontacts ? "True" : "False") . "%20and%20lastName%20like%20%27" . $lastname . "%27%20and%20firstName%20like%20%27" . $firstname . "%27"; //Set contact API url to include first and last name.
+	$url = $connectwise . "/$connectwisebranch/apis/3.0/company/contacts?conditions=inactiveFlag=" . ($inactivecontacts ? "True" : "False") . "%20and%20lastName%20contains%20%27" . $lastname . "%27%20and%20firstName%20contains%20%27" . $firstname . "%27"; //Set contact API url to include first and last name.
 }
 
 $utc = time(); //Get the time.
@@ -84,7 +84,7 @@ $dataTData = cURL($url, $header_data);
 if($dataTData==NULL) //If no contact is returned or your API URL is incorrect.
 {
     if ($timeoutfix == true) {
-        cURLPost($_GET["response_url"], array("Content-Type: application/json"), "POST", array("parse" => "full", "response_type" => "ephemeral","text" => "No contact found or your API URL is incorrect."));
+        cURLPost($_REQUEST["response_url"], array("Content-Type: application/json"), "POST", array("parse" => "full", "response_type" => "ephemeral","text" => "No contact found or your API URL is incorrect."));
     } else {
         die("No contact found or your API URL is incorrect."); //Post to slack
     }
@@ -142,7 +142,14 @@ if(array_key_exists("communicationItems",$dataTData[0]) && $dataTData[0]->commun
     foreach($comms as $item) {
         $type = $item->type; //Set the type variable to whatever the contact type is, this would be Email or Direct or whatever you have it set to in CW.
         $formatted = preg_replace('~.*(\d{3})[^\d]{0,7}(\d{3})[^\d]{0,7}(\d{4}).*~', '($1) $2-$3', $item->value); //Format phone numbers
-        $text = $text . $type->name . ": " . $formatted . "\n"; //Create a new line for each iteration,
+        if(array_key_exists("extension",$item) && $item->extension!=NULL)
+        {
+            $text = $text . $type->name . ": " . $formatted . " x" . $item->extension . "\n"; //Create a new line for each iteration,
+        }
+        else
+        {
+            $text = $text . $type->name . ": " . $formatted . "\n"; //Create a new line for each iteration,
+        }
     }
 }
 else
@@ -178,7 +185,7 @@ $return =array(
 	);
 
 if ($timeoutfix == true) {
-    cURLPost($_GET["response_url"], array("Content-Type: application/json"), "POST", $return);
+    cURLPost($_REQUEST["response_url"], array("Content-Type: application/json"), "POST", $return);
 } else {
     die(json_encode($return, JSON_PRETTY_PRINT)); //Return properly encoded arrays in JSON for Slack parsing.
 }

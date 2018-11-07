@@ -1,7 +1,7 @@
 <?php
 /*
 	CWSlack-SlashCommands
-    Copyright (C) 2016  jundis
+    Copyright (C) 2018  jundis
 
     This program is free software: you can redistribute it and/or modify
     it under the terms of the GNU General Public License as published by
@@ -38,6 +38,16 @@ $header_data2 =array(
  "Content-Type: application/json"
 );
 
+// Pre-connect mysql if it will be needed in the loop.
+if($usedatabase==1) {
+    $mysql = mysqli_connect($dbhost, $dbusername, $dbpassword, $dbdatabase); //Connect MySQL
+
+    if (!$mysql) //Check for errors
+    {
+        die("Connection Error: " . mysqli_connect_error()); //Return error
+    }
+}
+
 $dataTData = cURL($url, $header_data); //Decode the JSON returned by the CW API.
 
 foreach($dataTData as $entry) //For each schedule entry returned
@@ -55,13 +65,6 @@ foreach($dataTData as $entry) //For each schedule entry returned
     //Username mapping code
     if($usedatabase==1)
     {
-        $mysql = mysqli_connect($dbhost, $dbusername, $dbpassword, $dbdatabase); //Connect MySQL
-
-        if (!$mysql) //Check for errors
-        {
-            die("Connection Error: " . mysqli_connect_error()); //Return error
-        }
-
         $val1 = mysqli_real_escape_string($mysql,$user);
         $sql = "SELECT * FROM `usermap` WHERE `cwname`=\"" . $val1 . "\""; //SQL Query to select all ticket number entries
 

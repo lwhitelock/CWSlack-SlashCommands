@@ -1,7 +1,7 @@
 <?php
 /* 	
 	CWSlack-SlashCommands
-    Copyright (C) 2016  jundis
+    Copyright (C) 2018  jundis
 
     This program is free software: you can redistribute it and/or modify
     it under the terms of the GNU General Public License as published by
@@ -38,9 +38,16 @@ $dbusername = "username"; //Your MySQL DB Username
 $dbpassword = "password"; //Your MySQL DB Password
 $dbdatabase = "cwslack"; //Change if you have an existing database you want to use, otherwise leave as default.
 
+//E-mail configuration, required for lunch module mail functions
+$smtpserver = "smtp.domain.com"; //Set your SMTP server her
+$smtpport = 25; //Set your SMTP port. Defaults: 25 (No security), 465 (SSL), 587 (TLS)
+$smtpfrom = "notifications@domain.com"; //Set to the address all mail should be sent from
+$smtpname = "Company Notifications"; //Set to what you want e-mails to appear as coming from. E.x. Company Notifications <notfications@domain.com>
+
 //cwslack.php
 $slacktoken = "Slack Token Here"; //Set token from the Slack slash command screen.
 $useboards = 1; //Use the board function in new tickets. /t new company|summary vs /t new board|company|summary
+$schedulestatus = ""; //Set to the name of your status (e.x. "Scheduled") if you want the [/t # schedule] functions to update the status
 
 //cwslack-activities.php
 $slackactivitiestoken = "Slack Token Here"; //Set your token for the activities slash command
@@ -52,6 +59,7 @@ $inactivecontacts = false; //Set to true to return inactive contacts
 //cwlsack-notes.php
 $slacknotestoken = "Slack Token Here"; //Set your token for the notes slash command
 $usecwname = 1; //If set to 1, it will create tickets using the user's slack name. Command will fail if their slack name is not the same as connectwise name.
+$defaultnotetype = ""; //Set to internal, external, or externalemail and this will be used if they do not specify a type. Leave blank to have no default and return an error if they don't specify.
 
 //cwslack-configs.php
 $slackconfigstoken = "Slack Token Here"; //Set your token for the configs slash command
@@ -81,6 +89,8 @@ $timechan = "#ticketstime"; //Set to a channel to post to for $timeenabled
 $badboard = "Alerts"; //Set to any board name you want to fail, to avoid ticket creation/updates from this board posting to Slack.
 $badstatus = "Closed|Canceled"; //Set to any status name you want to fail, to avoid ticket creation/updates with this status from posting to Slack.
 $badcompany = "CatchAll (for email connector)"; //Set to any company name you want to fail, to avoid ticket creation for catchall from posting to Slack.
+//Example $boardmapping = "Alerts|alerts,Customer Support|support,Incoming|dispatch"; This would send Alerts to #alerts, Customer Support to #support, Incoming to #dispatch, and Orders to the channel specified on Slack's webhook page.
+$boardmapping = ""; //Put board to channel mappings in here. Formatted as "Board Name|channel,Board Name|channel". Any board not covered will go to the default channel for the webhook, filter boards using $badboard. Example above
 
 //cwslack-firmalerts.php
 //This uses the variables $webhookurl and $timechan from cwslack-incoming.php above.
@@ -92,6 +102,13 @@ $firmalertchan = "#dispatch"; //When you want to split time alerts and firm aler
 //cwslack-timealerts.php
 //This uses all four variables above
 $notimeusers = "user1|user2"; //Usernames of users who should not be alerted on. Useful if you have techs who occasionally enter time and you don't want it pinging them every day. Separate with pipe |
+$specialtimeusers = "user1,7:00am-4:00pm|user2,9:00am-6:00pm"; //Usernames of users who should be alerted on, but who have special hours different from default start-close. Seperate user and time with comma, seperate different users with pipe |. No spaces
+
+//cwslack-priorityalerts.php
+//This uses all the variables from firmalerts as well, adhering to it for whether to post to users/channel and which channel
+$prioritylist = "High|Critical"; // Name of the priority(ies) to look out for. Separate by pipe if more than one needed.
+$prioritystatus = "Scheduled|Scheduled -Notify"; // Status(es), seperated by pipe | symbol, which the priority alerts will check for and send alerts on.
+$prioritywait = 30; // Number of minutes to wait after a high-priority event before alerting the technician. Maximum 119 minutes.
 
 //cwslack-follow.php
 //Requires cwslack-incoming.php to function.
@@ -100,9 +117,28 @@ $followenabled = 0; //When set to 1, follow commands and the follow scripts will
 $followtoken = "follow"; //Change to random text to be used in your CW follow link if you use it. Defaults to follow which is fine for testing.
 $unfollowtoken = "unfollow"; //Change to random text to be used in your CW unfollow link if you use it. Defaults to unfollow which is fine for testing.
 
+//cwslack-lunch.php
+//E-mail functionality requires you to setup your system for PHP mail(), info below
+//Windows: https://stackoverflow.com/questions/4652566/php-mail-setup-in-xampp
+//Linux: http://lukepeters.me/blog/getting-the-php-mail-function-to-work-on-ubuntu
+$slacklunchtoken = "test"; // Set your token for the lunch slash command
+$lunchchargecode = 41; // Set to your "Break" charge code that lunches should be put under
+$lunchtime = 60; // Expected number of MINUTES that a user is on lunch
+$lunchmax = 120; // Number of minutes to allow before cancelling the lunch entry, does not submit time
+$lunchsendslack = true; // Send messages to a slack channel when a user goes on/off lunch
+$lunchsendemail = false; // Send messages to an e-mail address when a user goes on/off lunch
+$lunchsendonoff = 1; // Key: 0 = No notifications, 1 = Send notifications when a user goes on lunch, 2 = Send when a user goes off lunch, 3 = Send when a user goes on lunch OR off lunch
+$lunchslackchannel = "general"; // Channel to send Slack messages to
+$lunchemailto = "allstaff@domain.com"; // E-mail address to send messages to
+$lunchcreatesched = true; // Should the script create a schedule entry on the users board
+$lunchsavetime = true; // Should the script submit a time entry for the user for their lunch duration
+
 //cwslack-dbmanage.php
 $slackdbmantoken = "Slack Token Here"; //Set your token for the database management slash command
 $adminlist = "admin1|admin2"; //Separate by pipe symbol as seen in example if you need multiple people to have access.
+
+//cwslack-stats.php
+$collectstats = false; // By default this is turned off. Turn it on if you want stats collected to the stats table in MySQL. No slack based access to these stats.
 
 //Change optional
 $helpurl = "https://github.com/jundis/CWSlack-SlashCommands"; //Set your help article URL here.
@@ -116,6 +152,12 @@ $debugmode = false;
 
 //Timezone Setting to be used for all files.
 date_default_timezone_set($timezone);
+
+// Stats collection
+if($collectstats && array_key_exists("token",$_REQUEST))
+{
+    require_once 'cwslack-stats.php';
+}
 
 //Debug mode
 if($debugmode) //If debug mode is on..

@@ -4,7 +4,9 @@ This script, when hosted on a PHP supported web server, will act as a bridge bet
 
 cwslack.php, cwslack-incoming.php, cwslack-activities.php, cwslack-configs.php, and cwslack-contacts.php were designed to be independent, but all rely on the config.php and functions.php files. This allows you to pick and choose what you want and for different Slack commands instead of one universal /cw tickets 249123 and /cw contact john doe it can be /t 249123 and /c john doe.
 
-####Usage
+#### Note: This project is currently being maintained for bugs only, all further new feature development is being done on the hosted successor at https://mspic.io
+
+#### Usage
 
 * cwslack.php: Pull ticket information, create new tickets, change status, and change priority.
 * cwslack-activities.php: Pull activity information
@@ -24,7 +26,13 @@ This script set and all modules require PHP version 5 and the cURL extension, an
 
 For unsupported non-MySQL installation instructions, please see README_NoMySQL.md
 
-####Update Instructions
+**See TROUBLESHOOT.md first if you have any issues. Otherwise, contact info below.**
+
+You can reach me on the r/msp Discord, LabTechGeek Slack, or via reddit at /u/jundis if you need basic support.
+
+You can also reach me at joey(at)und.is should you need more intense support, custom modifications, or want your install done by me.
+
+#### Update Instructions
 
 Use the scripts found in the updates folder to upgrade from an older version to current. This will automatically update the config.php file with necessary values and create any new MySQL tables as well. You can also manually update by comparing the config file from this repository to your active one.
 
@@ -62,19 +70,15 @@ Use the scripts found in the updates folder to upgrade from an older version to 
 8. Change the $postupdated and $postadded to what you prefer. Enabling $postupdated can get spammy.
 9. Test it in Slack by creating a new ticket on the board you selected in step 6!
 
-####Different boards to different channels
+#### Different boards to different channels
 
-As of version 2.1, the cwslack-incoming.php script supports sending different support boards to different channels in Slack. This is accomplished by creating multiple integrator logins as specified in step 6 above but using the URL below for each callback.
+As of version 2.4 the implementation has been changed from using callback URLs to using the $boardmapping variable in config.php
 
-- https://domain.tld/cwslack-incoming.php?board=BoardName&channel=SlackChannel&id=
-
-You can specify multiple boards by separating them with a hyphen such as: ?board=BoardA-BoardB&channel=SlackAB
-
-By doing this, you can specify BoardA goes to ChannelA and BoardB goes to ChannelB. Note that in this usage, if you do not specify a callback for BoardC then it will not send tickets to Slack at all.
-
-## cwslack-firmalerts.php
+## cwslack-firmalerts.php AND cwslack-priorityalerts.php
 
 **(Requires some variables from cwslack-incoming.php to function if you don't use that)**
+
+Priority alerts uses the same instructions, same cron line just different file name.
 
 1. Download the cwslack-firmalerts.php, functions.php, install.php, and config-default.php files.
 2. Place on a compatible web server.
@@ -97,6 +101,14 @@ By doing this, you can specify BoardA goes to ChannelA and BoardB goes to Channe
 5. Setup a cron job or scheduled task on your server to run this PHP file **every 30 minutes.**  
    ```Cron: */30 * * * 1-5 /usr/bin/php /var/www/cwslack-timealerts.php >/dev/null 2>&1```
 6. Fail to enter time and test! It will alert after 2 hours of time is lacking.
+
+## cwslack-lunch.php
+
+This module requires a cron job or other scheduled task to clear the Lunch database table at midnight each night.
+
+Schedule using the following line in crontab.
+
+```0 0 * * * /usr/bin/php /var/www/cwslack-lunch-cron.php >/dev/null 2>&1```
 
 ## cwslack-follow.php
 

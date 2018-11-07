@@ -1,7 +1,7 @@
 <?php
 /*
 	CWSlack-SlashCommands
-    Copyright (C) 2016  jundis
+    Copyright (C) 2018  jundis
 
     This program is free software: you can redistribute it and/or modify
     it under the terms of the GNU General Public License as published by
@@ -22,11 +22,6 @@ ini_set('display_errors', 1); //Display errors in case something occurs
 header('Content-Type: application/json'); //Set the header to return JSON, required by Slack
 require_once 'config.php'; //Require the config file.
 require_once 'functions.php';
-
-if(strtotime("now") < strtotime($timebusinessstart) || strtotime("now") > strtotime($timebusinessclose))
-{
-    die("After hours");
-}
 
 //Set headers for cURL requests. $header_data covers API authentication while $header_data2 covers the Slack output.
 $header_data = authHeader($companyname, $apipublickey, $apiprivatekey);
@@ -50,32 +45,50 @@ if ($data == NULL)
 $timeset = array();
 $users = array();
 
-$expected = round((strtotime("now") - strtotime($timebusinessstart)) / 3600,2);
-
-if ($expected > (round((strtotime($timebusinessclose) - strtotime($timebusinessstart)) / 3600,2)))
-{
-    $expected = round((strtotime($timebusinessclose) - strtotime($timebusinessstart)) / 3600,2);
-}
-
 foreach($data as $entry)
 {
-    $name = $entry->enteredBy;
+    $name = $entry->member->identifier;
     if(array_key_exists($name,$timeset))
     {
-        $timeset[$entry->enteredBy]["totaltime"] = $timeset[$entry->enteredBy]["totaltime"] + $entry->actualHours;
+        $timeset[$entry->member->identifier]["totaltime"] = $timeset[$entry->member->identifier]["totaltime"] + $entry->actualHours;
     }
     else
     {
-        $timeset[$entry->enteredBy] = null;
-        $timeset[$entry->enteredBy]["totaltime"] = $entry->actualHours;
+        $timeset[$entry->member->identifier] = null;
+        $timeset[$entry->member->identifier]["totaltime"] = $entry->actualHours;
     }
 }
 
 $blockedtime = explode("|",$notimeusers);
-
+$specialusers = array();
+foreach(explode("|",$specialtimeusers) as $user)
+{
+    $tempval = explode(",", $user);
+    $specialusers[strtolower($tempval[0])] = $tempval[1];
+}
 foreach($timeset as $user => $val)
 {
-    if($expected - $val["totaltime"] >= 2 && !in_array(strtolower($user),array_map("strtolower",$blockedtime)))
+
+    if(array_key_exists(strtolower($user),$specialusers))
+    {
+        $specialtimes = explode("-",$specialusers[$user]);
+        $expectedtime = round((strtotime("now") - strtotime($specialtimes[0])) / 3600,2);
+        if ($expectedtime > (round((strtotime($specialtimes[1]) - strtotime($specialtimes[0])) / 3600,2)))
+        {
+            $expectedtime = round((strtotime($specialtimes[1]) - strtotime($specialtimes[0])) / 3600,2);
+        }
+    }
+    else
+    {
+        $expectedtime = round((strtotime("now") - strtotime($timebusinessstart)) / 3600,2);
+
+        if ($expectedtime > (round((strtotime($timebusinessclose) - strtotime($timebusinessstart)) / 3600,2)))
+        {
+            $expectedtime = round((strtotime($timebusinessclose) - strtotime($timebusinessstart)) / 3600,2);
+        }
+    }
+
+    if($expectedtime - $val["totaltime"] >= 2 && !in_array(strtolower($user),array_map("strtolower",$blockedtime)))
     {
         $username = $user;
         //Username mapping code
@@ -111,7 +124,39 @@ foreach($timeset as $user => $val)
 
 foreach($users as $user => $val)
 {
-    $missingtime = $expected - $timeset[$val]["totaltime"];
+    $ontheclock = true;
+
+    if(array_key_exists(strtolower($user),$specialusers))
+    {
+        $specialtimes = explode("-",$specialusers[$user]);
+        $expectedtime = round((strtotime("now") - strtotime($specialtimes[0])) / 3600,2);
+
+        if ($expectedtime > (round((strtotime($specialtimes[1]) - strtotime($specialtimes[0])) / 3600,2)))
+        {
+            $expectedtime = round((strtotime($specialtimes[1]) - strtotime($specialtimes[0])) / 3600,2);
+        }
+
+        if(strtotime("now") < strtotime($specialtimes[0]) || strtotime("now") > strtotime($specialtimes[1]))
+        {
+            $ontheclock = false;
+        }
+    }
+    else
+    {
+        $expectedtime = round((strtotime("now") - strtotime($timebusinessstart)) / 3600,2);
+
+        if ($expectedtime > (round((strtotime($timebusinessclose) - strtotime($timebusinessstart)) / 3600,2)))
+        {
+            $expectedtime = round((strtotime($timebusinessclose) - strtotime($timebusinessstart)) / 3600,2);
+        }
+
+        if(strtotime("now") < strtotime($timebusinessstart) || strtotime("now") > strtotime($timebusinessclose))
+        {
+            $ontheclock = false;
+        }
+    }
+
+    $missingtime = $expectedtime - $timeset[$val]["totaltime"];
 
     if($posttousers==1)
     {
@@ -129,7 +174,10 @@ foreach($users as $user => $val)
             ))
         );
 
-        cURLPost($webhookurl, $header_data2, "POST", $postfieldspre);
+        if($ontheclock)
+        {
+            cURLPost($webhookurl, $header_data2, "POST", $postfieldspre);
+        }
     }
 
     if($posttochan==1) //If channel post is on
@@ -167,7 +215,10 @@ foreach($users as $user => $val)
             );
         }
 
-        cURLPost($webhookurl, $header_data2, "POST", $postfieldspre);
+        if($ontheclock)
+        {
+            cURLPost($webhookurl, $header_data2, "POST", $postfieldspre);
+        }
     }
 
 }

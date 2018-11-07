@@ -1,7 +1,7 @@
 <?php
 /* 	
 	CWSlack-SlashCommands
-    Copyright (C) 2016  jundis
+    Copyright (C) 2018  jundis
 
     This program is free software: you can redistribute it and/or modify
     it under the terms of the GNU General Public License as published by
@@ -31,11 +31,11 @@ if($data==NULL)
 $info = json_decode(stripslashes($data->Entity)); //Decode the entity field which contains the JSON data we want.
 
 //Connection kill blocks. Stops things from running if certain conditions are met.
-if(empty($_GET['id']) || empty($_GET['action']) || empty($info)) die; //If anything we need doesn't exist, kill connection.
+if(empty($_REQUEST['id']) || empty($_REQUEST['action']) || empty($info)) die; //If anything we need doesn't exist, kill connection.
 
-if($_GET['action'] == "updated" && $_GET['srDetailRecId']==0 && $_GET['timeRecId']==0) die; //Kill connection if the update is not a note, and is something like a status change. This will prevent duplicate entries.
+if($_REQUEST['action'] == "updated" && $_REQUEST['srDetailRecId']==0 && $_REQUEST['timeRecId']==0) die; //Kill connection if the update is not a note, and is something like a status change. This will prevent duplicate entries.
 
-if($_GET['isProblemDescription']=="False" && $_GET['isInternalAnalysis']=="False" && $_GET['isResolution']=="False") die; //Die if no actual update.
+if($_REQUEST['isProblemDescription']=="False" && $_REQUEST['isInternalAnalysis']=="False" && $_REQUEST['isResolution']=="False") die; //Die if no actual update.
 
 $badboards = explode("|",$badboard); //Explode with pipe seperator.
 $badstatuses = explode("|",$badstatus); //Explode with pipe seperator.
@@ -43,32 +43,44 @@ $badcompanies = explode("|",$badcompany); //Explode with pipe seperator.
 if (in_array($info->BoardName,$badboards)) die;
 if (in_array($info->StatusName,$badstatuses)) die;
 if (in_array($info->CompanyName,$badcompanies)) die;
-if (!empty($_GET['board']))
+
+$channel = NULL; //Set channel to NULL for future use.
+
+if (!empty($boardmapping))
 {
-	if(strpos($_GET['board'], "-") !== false)
+	$explode = explode(",",$boardmapping);
+	foreach($explode as $item) {
+		$temp = explode("|",$item);
+		if(strcasecmp($temp[0],$info->BoardName) == 0) {
+			$channel = $temp[1];
+		}
+	}
+}
+else if (!empty($_REQUEST['board']))
+{
+	if(strpos($_REQUEST['board'], "-") !== false)
 	{
-		$tempboards = explode("-", $_GET['board']);
+		$tempboards = explode("-", $_REQUEST['board']);
 		if(!in_array($info->BoardName, $tempboards))
 		{
 			die("Incorrect board");
 		}
 	}
-	else if($_GET['board'] != $info->BoardName)
+	else if($_REQUEST['board'] != $info->BoardName)
 	{
 		die("Incorrect board");
 	}
-}
 
-$channel = NULL; //Set channel to NULL for future use.
-if(!empty($_GET['channel']))  //If using channels in URL is set, and channel is not empty..
-{
-	$channel = $_GET['channel']; //Set $channel to the channel.
+	if(!empty($_REQUEST['channel']))  //If using channels in URL is set, and channel is not empty..
+	{
+		$channel = $_REQUEST['channel']; //Set $channel to the channel.
+	}
 }
 
 //URL creation
 $ticketurl = $connectwise . "/$connectwisebranch/services/system_io/Service/fv_sr100_request.rails?service_recid="; //Set the URL required for ticket links.
-$noteurl = $connectwise . "/$connectwisebranch/apis/3.0/service/tickets/" . $_GET['id'] . "/notes?orderBy=id%20desc"; //Set the URL required for cURL requests to ticket note API.
-$timeurl = $connectwise . "/$connectwisebranch/apis/3.0/time/entries?conditions=chargeToId=" . $_GET['id'] . "&chargeToType=%27ServiceTicket%27&orderBy=dateEntered%20desc"; //Set the URL required for cURL requests to the time entry API.
+$noteurl = $connectwise . "/$connectwisebranch/apis/3.0/service/tickets/" . $_REQUEST['id'] . "/notes?orderBy=id%20desc"; //Set the URL required for cURL requests to ticket note API.
+$timeurl = $connectwise . "/$connectwisebranch/apis/3.0/time/entries?conditions=chargeToId=" . $_REQUEST['id'] . "&chargeToType=%27ServiceTicket%27&orderBy=dateEntered%20desc"; //Set the URL required for cURL requests to the time entry API.
 
 $dataTData = array(); //Blank array.
 $dataTimeData = array(); //Blank array.
@@ -82,7 +94,7 @@ $header_data2 =array(
 $skip = 0; //Create variable to skip posting to Slack channel while also allowing follow posts.
 $date=strtotime($info->EnteredDateUTC); //Convert date entered JSON result to time.
 $dateformat=date('m-d-Y g:i:sa',$date); //Convert previously converted time to a better time string.
-$ticket=$_GET['id'];
+$ticket=$_REQUEST['id'];
 $usetime = 0; //For posttext internal vs external flag.
 $dataarray = NULL; //For internal vs external flag.
 $dateformat = "None"; //Just in case!
@@ -141,16 +153,16 @@ if($posttext==1) //Block for curl to get latest note
 	}
 }
 
-if($_GET['action'] == "added" && $postadded == 1)
+if($_REQUEST['action'] == "added" && $postadded == 1)
 {
 	if($posttext==0)
 	{
 		$postfieldspre = array(
 			"channel" => ($channel!=NULL ? "#" . $channel : NULL),
 			"attachments"=>array(array(
-				"fallback" => (strtolower($_GET['memberId'])=="zadmin" ? $info->ContactName : $info->UpdatedBy) ." created #" . $ticket . " - " . ($postcompany ? "(" . $info->CompanyName . ") " : "") . $info->Summary,
+				"fallback" => (strtolower($_REQUEST['memberId'])=="zadmin" ? $info->ContactName : $info->UpdatedBy) ." created #" . $ticket . " - " . ($postcompany ? "(" . $info->CompanyName . ") " : "") . $info->Summary,
 				"title" => "<" . $ticketurl . $ticket . "&companyName=" . $companyname . "|#" . $ticket . ">: ". $info->Summary,
-				"pretext" => "Ticket #" . $ticket . " has been created by " . (strtolower($_GET['memberId'])=="zadmin" ? $info->ContactName : $info->UpdatedBy) . ".",
+				"pretext" => "Ticket #" . $ticket . " has been created by " . (strtolower($_REQUEST['memberId'])=="zadmin" ? $info->ContactName : $info->UpdatedBy) . ".",
 				"text" =>  $info->CompanyName . " | " . $info->ContactName . //Return "Company / Contact" string
 				"\n" . "Priority: " . $info->Priority . " | " . $info->StatusName . //Return "Prority / Status" string
 				"\n" . $info->Resources, //Return assigned resources
@@ -167,9 +179,9 @@ if($_GET['action'] == "added" && $postadded == 1)
 		$postfieldspre = array(
 			"channel" => ($channel!=NULL ? "#" . $channel : NULL),
 			"attachments"=>array(array(
-				"fallback" => (strtolower($_GET['memberId'])=="zadmin" ? $info->ContactName : $info->UpdatedBy) ." created #" . $ticket . " - " . ($postcompany ? "(" . $info->CompanyName . ") " : "") . $info->Summary,
+				"fallback" => (strtolower($_REQUEST['memberId'])=="zadmin" ? $info->ContactName : $info->UpdatedBy) ." created #" . $ticket . " - " . ($postcompany ? "(" . $info->CompanyName . ") " : "") . $info->Summary,
 				"title" => "<" . $ticketurl . $ticket . "&companyName=" . $companyname . "|#" . $ticket . ">: ". $info->Summary,
-				"pretext" => "Ticket #" . $ticket . " has been created by " . (strtolower($_GET['memberId'])=="zadmin" ? $info->ContactName : $info->UpdatedBy) . ".",
+				"pretext" => "Ticket #" . $ticket . " has been created by " . (strtolower($_REQUEST['memberId'])=="zadmin" ? $info->ContactName : $info->UpdatedBy) . ".",
 				"text" =>  $info->CompanyName . " | " . $info->ContactName . //Return "Company / Contact" string
 				"\n" . "Priority: " . $info->Priority . " | " . $info->StatusName . //Return "Prority / Status" string
 				"\n" . $info->Resources, //Return assigned resources
@@ -191,7 +203,7 @@ if($_GET['action'] == "added" && $postadded == 1)
 			);
 	}
 }
-else if($_GET['action'] == "updated" && $postupdated == 1)
+else if($_REQUEST['action'] == "updated" && $postupdated == 1)
 {
 	if($posttext==0)
 	{
@@ -282,16 +294,16 @@ if($followenabled==1)
 	if(!empty($alerts)) {
 		foreach ($alerts as $username) //For each user in alerts array, set $postfieldspre to the follow message.
 		{
-			if ($_GET['action'] == "added")
+			if ($_REQUEST['action'] == "added")
 			{
 				if ($posttext == 0)
 				{
 					$postfieldspre = array(
 						"channel" => "@" . $username,
 						"attachments" => array(array(
-							"fallback" => (strtolower($_GET['memberId'])=="zadmin" ? $info->ContactName : $info->UpdatedBy) ." created #" . $ticket . " - " . ($postcompany ? "(" . $info->CompanyName . ") " : "") . $info->Summary,
+							"fallback" => (strtolower($_REQUEST['memberId'])=="zadmin" ? $info->ContactName : $info->UpdatedBy) ." created #" . $ticket . " - " . ($postcompany ? "(" . $info->CompanyName . ") " : "") . $info->Summary,
 							"title" => "<" . $ticketurl . $ticket . "&companyName=" . $companyname . "|#" . $ticket . ">: " . $info->Summary,
-							"pretext" => "Ticket #" . $ticket . " has been created by " . (strtolower($_GET['memberId'])=="zadmin" ? $info->ContactName : $info->UpdatedBy) . ".",
+							"pretext" => "Ticket #" . $ticket . " has been created by " . (strtolower($_REQUEST['memberId'])=="zadmin" ? $info->ContactName : $info->UpdatedBy) . ".",
 							"text" => $info->CompanyName . " | " . $info->ContactName . //Return "Company / Contact" string
 								"\n" . "Priority: " . $info->Priority . " | " . $info->StatusName . //Return "Prority / Status" string
 								"\n" . $info->Resources, //Return assigned resources
@@ -306,9 +318,9 @@ if($followenabled==1)
 					$postfieldspre = array(
 						"channel" => "@" . $username,
 						"attachments" => array(array(
-							"fallback" => (strtolower($_GET['memberId'])=="zadmin" ? $info->ContactName : $info->UpdatedBy) ." created #" . $ticket . " - " . ($postcompany ? "(" . $info->CompanyName . ") " : "") . $info->Summary,
+							"fallback" => (strtolower($_REQUEST['memberId'])=="zadmin" ? $info->ContactName : $info->UpdatedBy) ." created #" . $ticket . " - " . ($postcompany ? "(" . $info->CompanyName . ") " : "") . $info->Summary,
 							"title" => "<" . $ticketurl . $ticket . "&companyName=" . $companyname . "|#" . $ticket . ">: " . $info->Summary,
-							"pretext" => "Ticket #" . $ticket . " has been created by " . (strtolower($_GET['memberId'])=="zadmin" ? $info->ContactName : $info->UpdatedBy) . ".",
+							"pretext" => "Ticket #" . $ticket . " has been created by " . (strtolower($_REQUEST['memberId'])=="zadmin" ? $info->ContactName : $info->UpdatedBy) . ".",
 							"text" => $info->CompanyName . " | " . $info->ContactName . //Return "Company / Contact" string
 								"\n" . "Priority: " . $info->Priority . " | " . $info->StatusName . //Return "Prority / Status" string
 								"\n" . $info->Resources, //Return assigned resources
@@ -329,7 +341,7 @@ if($followenabled==1)
 							))
 					);
 				}
-			} else if ($_GET['action'] == "updated") {
+			} else if ($_REQUEST['action'] == "updated") {
 				if ($posttext == 0) {
 					$postfieldspre = array(
 						"channel" => "@" . $username,
@@ -383,17 +395,17 @@ if($followenabled==1)
 //Block for if ticket time reaches past X value
 if($timeenabled==1 && $info->ActualHours>$timepast)
 {
-	if($_GET['action'] == "added")
+	if($_REQUEST['action'] == "added")
 	{
 		if($posttext==0)
 		{
 			$postfieldspre = array(
 				"channel"=>$timechan,
 				"attachments"=>array(array(
-					"fallback" => (strtolower($_GET['memberId'])=="zadmin" ? $info->ContactName : $info->UpdatedBy) ." created #" . $ticket . " - " . ($postcompany ? "(" . $info->CompanyName . ") " : "") . $info->Summary,
+					"fallback" => (strtolower($_REQUEST['memberId'])=="zadmin" ? $info->ContactName : $info->UpdatedBy) ." created #" . $ticket . " - " . ($postcompany ? "(" . $info->CompanyName . ") " : "") . $info->Summary,
 					"title" => "<" . $ticketurl . $ticket . "&companyName=" . $companyname . "|#" . $ticket . ">: ". $info->Summary,
 					"color" => "#F0E68C",
-					"pretext" => "Ticket #" . $ticket . " has been created by " . (strtolower($_GET['memberId'])=="zadmin" ? $info->ContactName : $info->UpdatedBy) . ".",
+					"pretext" => "Ticket #" . $ticket . " has been created by " . (strtolower($_REQUEST['memberId'])=="zadmin" ? $info->ContactName : $info->UpdatedBy) . ".",
 					"text" =>  $info->CompanyName . " | " . $info->ContactName . //Return "Company / Contact" string
 						"\n" . "Priority: " . $info->Priority . " | " . $info->StatusName . //Return "Prority / Status" string
 						"\n" . $info->Resources . " | Total Hours: *" . $info->ActualHours . "*", //Return assigned resources
@@ -410,10 +422,10 @@ if($timeenabled==1 && $info->ActualHours>$timepast)
 			$postfieldspre = array(
 				"channel"=>$timechan,
 				"attachments"=>array(array(
-					"fallback" => (strtolower($_GET['memberId'])=="zadmin" ? $info->ContactName : $info->UpdatedBy) ." created #" . $ticket . " - " . ($postcompany ? "(" . $info->CompanyName . ") " : "") . $info->Summary,
+					"fallback" => (strtolower($_REQUEST['memberId'])=="zadmin" ? $info->ContactName : $info->UpdatedBy) ." created #" . $ticket . " - " . ($postcompany ? "(" . $info->CompanyName . ") " : "") . $info->Summary,
 					"title" => "<" . $ticketurl . $ticket . "&companyName=" . $companyname . "|#" . $ticket . ">: ". $info->Summary,
 					"color" => "#F0E68C",
-					"pretext" => "Ticket #" . $ticket . " has been created by " . (strtolower($_GET['memberId'])=="zadmin" ? $info->ContactName : $info->UpdatedBy) . ".",
+					"pretext" => "Ticket #" . $ticket . " has been created by " . (strtolower($_REQUEST['memberId'])=="zadmin" ? $info->ContactName : $info->UpdatedBy) . ".",
 					"text" =>  $info->CompanyName . " | " . $info->ContactName . //Return "Company / Contact" string
 						"\n" . "Priority: " . $info->Priority . " | " . $info->StatusName . //Return "Prority / Status" string
 						"\n" . $info->Resources . " | Total Hours: *" . $info->ActualHours . "*", //Return assigned resources
@@ -435,7 +447,7 @@ if($timeenabled==1 && $info->ActualHours>$timepast)
 			);
 		}
 	}
-	else if($_GET['action'] == "updated")
+	else if($_REQUEST['action'] == "updated")
 	{
 		if ($posttext == 0) {
 			$postfieldspre = array(

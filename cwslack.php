@@ -1,7 +1,7 @@
 <?php
 /* 	
 	CWSlack-SlashCommands
-    Copyright (C) 2016  jundis
+    Copyright (C) 2018  jundis
 
     This program is free software: you can redistribute it and/or modify
     it under the terms of the GNU General Public License as published by
@@ -17,8 +17,6 @@
     along with this program.  If not, see <http://www.gnu.org/licenses/>. 
 */
 
-// This is a development branch, please use with caution as things will frequently be changing.
-
 ini_set('display_errors', 1); //Display errors in case something occurs
 header('Content-Type: application/json'); //Set the header to return JSON, required by Slack
 require_once 'config.php';
@@ -29,9 +27,9 @@ $header_data = authHeader($companyname, $apipublickey, $apiprivatekey);
 // Authorization array, with extra json content-type used in patch commands to change tickets.
 $header_data2 = postHeader($companyname, $apipublickey, $apiprivatekey);
 
-if(empty($_GET['token']) || ($_GET['token'] != $slacktoken)) die("Slack token invalid."); //If Slack token is not correct, kill the connection. This allows only Slack to access the page for security purposes.
-if(empty($_GET['text'])) die("No text provided."); //If there is no text added, kill the connection.
-$exploded = explode(" ",$_GET['text']); //Explode the string attached to the slash command for use in variables.
+if(empty($_REQUEST['token']) || ($_REQUEST['token'] != $slacktoken)) die("Slack token invalid."); //If Slack token is not correct, kill the connection. This allows only Slack to access the page for security purposes.
+if(empty($_REQUEST['text'])) die("No text provided."); //If there is no text added, kill the connection.
+$exploded = explode(" ",$_REQUEST['text']); //Explode the string attached to the slash command for use in variables.
 
 //This section checks if the ticket number is not equal to 6 digits (our tickets are in the hundreds of thousands but not near a million yet) and kills the connection if it's not.
 if(!is_numeric($exploded[0])) {
@@ -62,7 +60,7 @@ if($timeoutfix == true)
 	flush();
 	session_write_close();
 	if($sendtimeoutwait==true) {
-		cURLPost($_GET["response_url"], array("Content-Type: application/json"), "POST", array("parse" => "full", "response_type" => "ephemeral", "text" => "Please wait..."));
+		cURLPost($_REQUEST["response_url"], array("Content-Type: application/json"), "POST", array("parse" => "full", "response_type" => "ephemeral", "text" => "Please wait..."));
 	}
 }
 //End timeout fix block
@@ -106,7 +104,7 @@ if (strpos(strtolower($exploded[0]), "new") !== false)
 	{
 		if(!array_key_exists(2, $ticketstuff)) {
 			if ($timeoutfix == true) {
-				cURLPost($_GET["response_url"], array("Content-Type: application/json"), "POST", array("parse" => "full", "response_type" => "ephemeral","text" => "Not enough values specified. Please use /t new board|company|summary"));
+				cURLPost($_REQUEST["response_url"], array("Content-Type: application/json"), "POST", array("parse" => "full", "response_type" => "ephemeral","text" => "Not enough values specified. Please use /t new board|company|summary"));
 			} else {
 				die("Not enough values specified. Please use /t new board|company|summary"); //Return properly encoded arrays in JSON for Slack parsing.
 			}
@@ -114,6 +112,16 @@ if (strpos(strtolower($exploded[0]), "new") !== false)
 		}
 		$companyurl = $connectwise . "/$connectwisebranch/apis/3.0/company/companies?conditions=name%20contains%20%27" . urlencode($ticketstuff[1]) . "%27";
 		$companydata = cURL($companyurl, $header_data);
+
+		if(is_null($companydata))
+		{
+			if ($timeoutfix == true) {
+				cURLPost($_REQUEST["response_url"], array("Content-Type: application/json"), "POST", array("parse" => "full", "response_type" => "ephemeral","text" => "No company found with the name " . $ticketstuff[0]));
+			} else {
+				die("No company found with the name " . $ticketstuff[0]); //Return properly encoded arrays in JSON for Slack parsing.
+			}
+			die();
+		}
 
 		$boardurl = $connectwise . "/$connectwisebranch/apis/3.0/service/boards?conditions=name%20contains%20%27" .$ticketstuff[0]. "%27";
 		$boarddata = cURL($boardurl, $header_data);
@@ -131,7 +139,7 @@ if (strpos(strtolower($exploded[0]), "new") !== false)
 	{
 		if(!array_key_exists(1, $ticketstuff)) {
 			if ($timeoutfix == true) {
-				cURLPost($_GET["response_url"], array("Content-Type: application/json"), "POST", array("parse" => "full", "response_type" => "ephemeral","text" => "Not enough values specified. Please use /t new company|summary"));
+				cURLPost($_REQUEST["response_url"], array("Content-Type: application/json"), "POST", array("parse" => "full", "response_type" => "ephemeral","text" => "Not enough values specified. Please use /t new company|summary"));
 			} else {
 				die("Not enough values specified. Please use /t new company|summary"); //Return properly encoded arrays in JSON for Slack parsing.
 			}
@@ -139,8 +147,18 @@ if (strpos(strtolower($exploded[0]), "new") !== false)
 
 		}
 
-		$companyurl = $connectwise . "/$connectwisebranch/apis/3.0/company/companies?conditions=name%20contains%20%27" . $ticketstuff[1] . "%27";
+		$companyurl = $connectwise . "/$connectwisebranch/apis/3.0/company/companies?conditions=name%20contains%20%27" . urlencode($ticketstuff[0]) . "%27";
 		$companydata = cURL($companyurl, $header_data);
+
+		if(is_null($companydata))
+		{
+			if ($timeoutfix == true) {
+				cURLPost($_REQUEST["response_url"], array("Content-Type: application/json"), "POST", array("parse" => "full", "response_type" => "ephemeral","text" => "No company found with the name " . $ticketstuff[0]));
+			} else {
+				die("No company found with the name " . $ticketstuff[0]); //Return properly encoded arrays in JSON for Slack parsing.
+			}
+			die();
+		}
 
 		$postarray = array(
 			"summary" => $ticketstuff[1],
@@ -156,14 +174,14 @@ if (strpos(strtolower($exploded[0]), "new") !== false)
 		if (!$mysql) //Check for errors
 		{
 			if ($timeoutfix == true) {
-				cURLPost($_GET["response_url"], array("Content-Type: application/json"), "POST", array("parse" => "full", "response_type" => "ephemeral","text" => "Connection Error: " . mysqli_connect_error()));
+				cURLPost($_REQUEST["response_url"], array("Content-Type: application/json"), "POST", array("parse" => "full", "response_type" => "ephemeral","text" => "Connection Error: " . mysqli_connect_error()));
 			} else {
 				die("Connection Error: " . mysqli_connect_error()); //Return properly encoded arrays in JSON for Slack parsing.
 			}
 			die();
 		}
 
-		$val1 = mysqli_real_escape_string($mysql,$_GET["user_name"]);
+		$val1 = mysqli_real_escape_string($mysql,$_REQUEST["user_name"]);
 		$sql = "SELECT * FROM `usermap` WHERE `slackuser`=\"" . $val1 . "\""; //SQL Query to select all ticket number entries
 
 		$result = mysqli_query($mysql, $sql); //Run result
@@ -183,8 +201,8 @@ if (strpos(strtolower($exploded[0]), "new") !== false)
 		{
 			if($usecwname==1) //If variable enabled
 			{
-				$postarray["enteredBy"] = $_GET['user_name'];
-				$postarray["owner"] = array("identifier"=>$_GET['user_name']); //Return the slack username as the user for the ticket note. If the user does not exist in CW, it will use the API username.
+				$postarray["enteredBy"] = $_REQUEST['user_name'];
+				$postarray["owner"] = array("identifier"=>$_REQUEST['user_name']); //Return the slack username as the user for the ticket note. If the user does not exist in CW, it will use the API username.
 			}
 		}
 	}
@@ -192,8 +210,8 @@ if (strpos(strtolower($exploded[0]), "new") !== false)
 	{
 		if($usecwname==1)
 		{
-			$postarray["enteredBy"] = $_GET['user_name'];
-			$postarray["owner"] = array("identifier"=>$_GET['user_name']);
+			$postarray["enteredBy"] = $_REQUEST['user_name'];
+			$postarray["owner"] = array("identifier"=>$_REQUEST['user_name']);
 		}
 	}
 
@@ -206,7 +224,7 @@ if (strpos(strtolower($exploded[0]), "new") !== false)
 
 	if($timeoutfix == true)
 	{
-		cURLPost($_GET["response_url"],array("Content-Type: application/json"),"POST",array("parse" => "full", "response_type" => "ephemeral","text" => "New ticket #<" . $connectwise . "/$connectwisebranch/services/system_io/Service/fv_sr100_request.rails?service_recid=" . $dataTCmd->id . "|" . $dataTCmd->id . "> has been created.","mrkdwn"=>true));
+		cURLPost($_REQUEST["response_url"],array("Content-Type: application/json"),"POST",array("parse" => "full", "response_type" => "ephemeral","text" => "New ticket #<" . $connectwise . "/$connectwisebranch/services/system_io/Service/fv_sr100_request.rails?service_recid=" . $dataTCmd->id . "|" . $dataTCmd->id . "> has been created.","mrkdwn"=>true));
 	}
 	else
 	{
@@ -223,7 +241,7 @@ $dataTData = cURL($urlticketdata, $header_data); //Decode the JSON returned by t
 if($dataTData==NULL) 
 {
 	if ($timeoutfix == true) {
-		cURLPost($_GET["response_url"], array("Content-Type: application/json"), "POST", array("parse" => "full", "response_type" => "ephemeral","text" => "Array not returned in line 195. Please check your connectwise URL variable in config.php and ensure it is accessible via the web at " . $urlticketdata));
+		cURLPost($_REQUEST["response_url"], array("Content-Type: application/json"), "POST", array("parse" => "full", "response_type" => "ephemeral","text" => "Array not returned in line 195. Please check your connectwise URL variable in config.php and ensure it is accessible via the web at " . $urlticketdata));
 	} else {
 		die("Array not returned in line 195. Please check your connectwise URL variable in config.php and ensure it is accessible via the web at " . $urlticketdata); //Return properly encoded arrays in JSON for Slack parsing.
 	}
@@ -237,7 +255,7 @@ if($command=="priority") { //Check if the second string in the text array from t
 
 	$priority = "0"; //Set priority = 0.
 	$priorityname = "";
-	$priorityurl = $connectwise . "/$connectwisebranch/apis/3.0/service/priorities?conditions=name%20like%20%27" . $option3 . "%27";
+	$priorityurl = $connectwise . "/$connectwisebranch/apis/3.0/service/priorities?conditions=name%20like%20%27%2A" . $option3 . "%2A%27";
 	$dataTCmd = cURL($priorityurl, $header_data);
 	if(array_key_exists(0,$dataTCmd))
 	{
@@ -248,7 +266,7 @@ if($command=="priority") { //Check if the second string in the text array from t
 	if ($priority==0)
 	{
 		if ($timeoutfix == true) {
-			cURLPost($_GET["response_url"], array("Content-Type: application/json"), "POST", array("parse" => "full", "response_type" => "ephemeral","text" => "Failed to get priority code: " . $option3));
+			cURLPost($_REQUEST["response_url"], array("Content-Type: application/json"), "POST", array("parse" => "full", "response_type" => "ephemeral","text" => "Failed to get priority code: " . $option3));
 		} else {
 			die("Failed to get priority code: " . $option3); //Return properly encoded arrays in JSON for Slack parsing.
 		}
@@ -278,7 +296,7 @@ if($command=="priority") { //Check if the second string in the text array from t
 	);
 
 	if ($timeoutfix == true) {
-		cURLPost($_GET["response_url"], array("Content-Type: application/json"), "POST", $return);
+		cURLPost($_REQUEST["response_url"], array("Content-Type: application/json"), "POST", $return);
 	} else {
 		die(json_encode($return, JSON_PRETTY_PRINT)); //Return properly encoded arrays in JSON for Slack parsing.
 	}
@@ -291,7 +309,7 @@ if($command=="priority") { //Check if the second string in the text array from t
 if($command=="status") {
 	$status = "0";
 	$statusname = "";
-	$statusurl = $dataTData->board->_info->board_href . "/statuses?conditions=name%20like%20%27" . $option3 . "%27";
+	$statusurl = $dataTData->board->_info->board_href . "/statuses?conditions=name%20contains%20%27" . $option3 . "%27";
 	$dataTCmd = cURL($statusurl, $header_data);
 	if(array_key_exists(0,$dataTCmd))
 	{
@@ -301,7 +319,7 @@ if($command=="status") {
 	if ($status == 0)
 	{
 		if ($timeoutfix == true) {
-			cURLPost($_GET["response_url"], array("Content-Type: application/json"), "POST", array("parse" => "full", "response_type" => "ephemeral","text" => "Failed to get status code: " . $status));
+			cURLPost($_REQUEST["response_url"], array("Content-Type: application/json"), "POST", array("parse" => "full", "response_type" => "ephemeral","text" => "Failed to get status code: " . $status));
 		} else {
 			die("Failed to get status code: " . $status); //Return properly encoded arrays in JSON for Slack parsing.
 		}
@@ -330,7 +348,7 @@ if($command=="status") {
 		))
 	);
 	if ($timeoutfix == true) {
-		cURLPost($_GET["response_url"], array("Content-Type: application/json"), "POST", $return);
+		cURLPost($_REQUEST["response_url"], array("Content-Type: application/json"), "POST", $return);
 	} else {
 		die(json_encode($return, JSON_PRETTY_PRINT)); //Return properly encoded arrays in JSON for Slack parsing.
 	}
@@ -349,14 +367,14 @@ if($command=="scheduleme")
 		if (!$mysql) //Check for errors
 		{
 			if ($timeoutfix == true) {
-				cURLPost($_GET["response_url"], array("Content-Type: application/json"), "POST", array("parse" => "full", "response_type" => "ephemeral","text" => "Connection Error: " . mysqli_connect_error()));
+				cURLPost($_REQUEST["response_url"], array("Content-Type: application/json"), "POST", array("parse" => "full", "response_type" => "ephemeral","text" => "Connection Error: " . mysqli_connect_error()));
 			} else {
 				die("Connection Error: " . mysqli_connect_error()); //Return properly encoded arrays in JSON for Slack parsing.
 			}
 			die();
 		}
 
-		$val1 = mysqli_real_escape_string($mysql,$_GET["user_name"]);
+		$val1 = mysqli_real_escape_string($mysql,$_REQUEST["user_name"]);
 		$sql = "SELECT * FROM `usermap` WHERE `slackuser`=\"" . $val1 . "\""; //SQL Query to select all ticket number entries
 
 		$result = mysqli_query($mysql, $sql); //Run result
@@ -375,7 +393,7 @@ if($command=="scheduleme")
 		{
 			if($usecwname==1) //If variable enabled
 			{
-				$cwuser = $_GET['user_name'];
+				$cwuser = $_REQUEST['user_name'];
 			}
 		}
 	}
@@ -383,14 +401,14 @@ if($command=="scheduleme")
 	{
 		if($usecwname==1)
 		{
-			$cwuser = $_GET['user_name'];
+			$cwuser = $_REQUEST['user_name'];
 		}
 		else
 		{
 			if ($timeoutfix == true) {
-				cURLPost($_GET["response_url"], array("Content-Type: application/json"), "POST", array("parse" => "full", "response_type" => "ephemeral","text" => "Error: Name " .  $_GET['user_name'] . " not found"));
+				cURLPost($_REQUEST["response_url"], array("Content-Type: application/json"), "POST", array("parse" => "full", "response_type" => "ephemeral","text" => "Error: Name " .  $_REQUEST['user_name'] . " not found"));
 			} else {
-				die("Error: Name " .  $_GET['user_name'] . " not found"); //Return properly encoded arrays in JSON for Slack parsing.
+				die("Error: Name " .  $_REQUEST['user_name'] . " not found"); //Return properly encoded arrays in JSON for Slack parsing.
 			}
 			die();
 		}
@@ -419,20 +437,61 @@ if($command=="scheduleme")
 		$dateend = $datestart;
 	}
 
-	$postarray = array("objectId" => $ticketnumber, "member" => array("identifier" => $cwuser), "type" => array("id" => 4), "dateStart" => $datestart, "dateEnd" => $dateend, "allowScheduleConflictsFlag" => true);
+	if(!empty($schedulestatus))
+	{
+        $status = "0";
+        $statusname = "";
+        $statusurl = $dataTData->board->_info->board_href . "/statuses?conditions=name%20like%20%27" . $schedulestatus . "%27";
+        $dataStatus = cURL($statusurl, $header_data);
+        if(array_key_exists(0,$dataStatus))
+        {
+            $status = $dataStatus[0]->id;
+            $statusname = $dataStatus[0]->name;
+        }
+        if ($status == 0)
+        {
+            if ($timeoutfix == true) {
+                cURLPost($_REQUEST["response_url"], array("Content-Type: application/json"), "POST", array("parse" => "full", "response_type" => "ephemeral","text" => "Failed to get status code: " . $status));
+            } else {
+                die("Failed to get status code: " . $status); //Return properly encoded arrays in JSON for Slack parsing.
+            }
+            die();
+        }
 
-	$dataTCmd = cURLPost(
-		$connectwise . "/$connectwisebranch/apis/3.0/schedule/entries",
-		$header_data2,
-		"POST",
-		$postarray
-	);
+        $dataStatus = cURLPost(
+            $urlticketdata,
+            $header_data2,
+            "PATCH",
+            array(array("op" => "replace", "path" => "/status/id", "value" => $status))
+        );
+
+        $postarray = array("objectId" => $ticketnumber, "member" => array("identifier" => $cwuser), "type" => array("id" => 4), "dateStart" => $datestart, "dateEnd" => $dateend, "allowScheduleConflictsFlag" => true);
+
+        $dataTCmd = cURLPost(
+            $connectwise . "/$connectwisebranch/apis/3.0/schedule/entries",
+            $header_data2,
+            "POST",
+            $postarray
+        );
+	}
+	else
+	{
+        $postarray = array("objectId" => $ticketnumber, "member" => array("identifier" => $cwuser), "type" => array("id" => 4), "dateStart" => $datestart, "dateEnd" => $dateend, "allowScheduleConflictsFlag" => true);
+
+        $dataTCmd = cURLPost(
+            $connectwise . "/$connectwisebranch/apis/3.0/schedule/entries",
+            $header_data2,
+            "POST",
+            $postarray
+        );
+	}
+
 
 	if($removal==NULL)
 	{
 		$timingdate = explode("T", $datestart);
 		if ($timeoutfix == true) {
-			cURLPost($_GET["response_url"], array("Content-Type: application/json"), "POST", array("parse" => "full", "response_type" => "ephemeral","text" => "You have been properly scheduled for ticket #" . $dataTCmd->objectId . " for $timingdate[0]","mrkdwn"=>true));
+			cURLPost($_REQUEST["response_url"], array("Content-Type: application/json"), "POST", array("parse" => "full", "response_type" => "ephemeral","text" => "You have been properly scheduled for ticket #" . $dataTCmd->objectId . " for $timingdate[0]","mrkdwn"=>true));
 		} else {
 			die("You have been properly scheduled for ticket #" . $dataTCmd->objectId . " for $timingdate[0]"); //Return properly encoded arrays in JSON for Slack parsing.
 		}
@@ -441,7 +500,7 @@ if($command=="scheduleme")
 	else
 	{
 		if ($timeoutfix == true) {
-			cURLPost($_GET["response_url"], array("Content-Type: application/json"), "POST", array("parse" => "full", "response_type" => "ephemeral","text" => "You have been properly scheduled for ticket #" . $dataTCmd->objectId . " at " . $removal,"mrkdwn"=>true));
+			cURLPost($_REQUEST["response_url"], array("Content-Type: application/json"), "POST", array("parse" => "full", "response_type" => "ephemeral","text" => "You have been properly scheduled for ticket #" . $dataTCmd->objectId . " at " . $removal,"mrkdwn"=>true));
 		} else {
 			die("You have been properly scheduled for ticket #" . $dataTCmd->objectId . " at " . $removal); //Return properly encoded arrays in JSON for Slack parsing.
 		}
@@ -456,7 +515,7 @@ if($command=="schedule")
 	if($option3 == NULL)
 	{
 		if ($timeoutfix == true) {
-			cURLPost($_GET["response_url"], array("Content-Type: application/json"), "POST", array("parse" => "full", "response_type" => "ephemeral","text" => "No user specified."));
+			cURLPost($_REQUEST["response_url"], array("Content-Type: application/json"), "POST", array("parse" => "full", "response_type" => "ephemeral","text" => "No user specified."));
 		} else {
 			die("No user specified."); //Return properly encoded arrays in JSON for Slack parsing.
 		}
@@ -471,7 +530,7 @@ if($command=="schedule")
 		if (!$mysql) //Check for errors
 		{
 			if ($timeoutfix == true) {
-				cURLPost($_GET["response_url"], array("Content-Type: application/json"), "POST", array("parse" => "full", "response_type" => "ephemeral","text" => "Connection Error: " . mysqli_connect_error()));
+				cURLPost($_REQUEST["response_url"], array("Content-Type: application/json"), "POST", array("parse" => "full", "response_type" => "ephemeral","text" => "Connection Error: " . mysqli_connect_error()));
 			} else {
 				die("Connection Error: " . mysqli_connect_error()); //Return properly encoded arrays in JSON for Slack parsing.
 			}
@@ -510,7 +569,7 @@ if($command=="schedule")
 		else
 		{
 			if ($timeoutfix == true) {
-				cURLPost($_GET["response_url"], array("Content-Type: application/json"), "POST", array("parse" => "full", "response_type" => "ephemeral","text" => "Error: Name " .  $username . " not found"));
+				cURLPost($_REQUEST["response_url"], array("Content-Type: application/json"), "POST", array("parse" => "full", "response_type" => "ephemeral","text" => "Error: Name " .  $username . " not found"));
 			} else {
 				die("Error: Name " .  $username . " not found"); //Return properly encoded arrays in JSON for Slack parsing.
 			}
@@ -542,20 +601,60 @@ if($command=="schedule")
 		$dateend = $datestart;
 	}
 
-	$postarray = array("objectId" => $ticketnumber, "member" => array("identifier" => $cwuser), "type" => array("id" => 4), "dateStart" => $datestart, "dateEnd" => $dateend, "allowScheduleConflictsFlag" => true);
+    if(!empty($schedulestatus))
+    {
+        $status = "0";
+        $statusname = "";
+        $statusurl = $dataTData->board->_info->board_href . "/statuses?conditions=name%20like%20%27" . $schedulestatus . "%27";
+        $dataStatus = cURL($statusurl, $header_data);
+        if(array_key_exists(0,$dataStatus))
+        {
+            $status = $dataStatus[0]->id;
+            $statusname = $dataStatus[0]->name;
+        }
+        if ($status == 0)
+        {
+            if ($timeoutfix == true) {
+                cURLPost($_REQUEST["response_url"], array("Content-Type: application/json"), "POST", array("parse" => "full", "response_type" => "ephemeral","text" => "Failed to get status code: " . $status));
+            } else {
+                die("Failed to get status code: " . $status); //Return properly encoded arrays in JSON for Slack parsing.
+            }
+            die();
+        }
 
-	$dataTCmd = cURLPost(
-		$connectwise . "/$connectwisebranch/apis/3.0/schedule/entries",
-		$header_data2,
-		"POST",
-		$postarray
-	);
+        $dataStatus = cURLPost(
+            $urlticketdata,
+            $header_data2,
+            "PATCH",
+            array(array("op" => "replace", "path" => "/status/id", "value" => $status))
+        );
+
+        $postarray = array("objectId" => $ticketnumber, "member" => array("identifier" => $cwuser), "type" => array("id" => 4), "dateStart" => $datestart, "dateEnd" => $dateend, "allowScheduleConflictsFlag" => true);
+
+        $dataTCmd = cURLPost(
+            $connectwise . "/$connectwisebranch/apis/3.0/schedule/entries",
+            $header_data2,
+            "POST",
+            $postarray
+        );
+    }
+    else
+	{
+        $postarray = array("objectId" => $ticketnumber, "member" => array("identifier" => $cwuser), "type" => array("id" => 4), "dateStart" => $datestart, "dateEnd" => $dateend, "allowScheduleConflictsFlag" => true);
+
+        $dataTCmd = cURLPost(
+            $connectwise . "/$connectwisebranch/apis/3.0/schedule/entries",
+            $header_data2,
+            "POST",
+            $postarray
+        );
+	}
 
 	if($removal==NULL)
 	{
 		$timingdate = explode("T", $datestart);
 		if ($timeoutfix == true) {
-			cURLPost($_GET["response_url"], array("Content-Type: application/json"), "POST", array("parse" => "full", "response_type" => "ephemeral","text" => "$username has been properly scheduled for ticket #" . $dataTCmd->objectId . " for $timingdate[0]","mrkdwn"=>true));
+			cURLPost($_REQUEST["response_url"], array("Content-Type: application/json"), "POST", array("parse" => "full", "response_type" => "ephemeral","text" => "$username has been properly scheduled for ticket #" . $dataTCmd->objectId . " for $timingdate[0]","mrkdwn"=>true));
 		} else {
 			die("$username has been properly scheduled for ticket #" . $dataTCmd->objectId . " for $timingdate[0]"); //Return properly encoded arrays in JSON for Slack parsing.
 		}
@@ -564,7 +663,7 @@ if($command=="schedule")
 	else
 	{
 		if ($timeoutfix == true) {
-			cURLPost($_GET["response_url"], array("Content-Type: application/json"), "POST", array("parse" => "full", "response_type" => "ephemeral","text" => "$username has been properly scheduled for ticket #" . $dataTCmd->objectId . " at " . $removal,"mrkdwn"=>true));
+			cURLPost($_REQUEST["response_url"], array("Content-Type: application/json"), "POST", array("parse" => "full", "response_type" => "ephemeral","text" => "$username has been properly scheduled for ticket #" . $dataTCmd->objectId . " at " . $removal,"mrkdwn"=>true));
 		} else {
 			die("$username has been properly scheduled for ticket #" . $dataTCmd->objectId . " at " . $removal); //Return properly encoded arrays in JSON for Slack parsing.
 		}
@@ -647,7 +746,8 @@ if($posttext==1) //Block for curl to get latest note
 }
 
 //Scheduled resource block
-$resourceset = cURL($dataTData->_info->scheduleentries_href,$header_data); //Get URL and send that to curl function, retrieve response.
+$scheduleurl = str_replace(' ', '%20', $dataTData->_info->scheduleentries_href);
+$resourceset = cURL($scheduleurl,$header_data); //Get URL and send that to curl function, retrieve response.
 
 if($resourceset == NULL)
 {
@@ -655,10 +755,9 @@ if($resourceset == NULL)
 }
 else
 {
-	$latestres = end($resourceset);
+	$latestsched = end($resourceset);
 
-	$latestsched = cURL($latestres->_info->schedule_href,$header_data);
-	if($latestsched->dateStart==NULL)
+	if(!array_key_exists("dateStart",$latestsched) || $latestsched->dateStart==NULL)
 	{
 		$resourceline = false;
 	}
@@ -672,6 +771,8 @@ else
 	}
 }
 
+$lastupdate = "\nUpdated: " . $dataTData->_info->updatedBy . " at " . date("m-d-y g:iA", strtotime($dataTData->_info->lastUpdated));
+
 
 $date=strtotime($dataTData->dateEntered); //Convert date entered JSON result to time.
 $dateformat=date('m-d-Y g:i:sa',$date); //Convert previously converted time to a better time string.
@@ -680,17 +781,17 @@ $contact="None"; //Set None for contact in case no contact exists for "Catch All
 $resources="No resources"; //Just in case resources are null, have something to return.
 $hours="No time entered."; //Just in case time is null, have something to return.
 
-if($dataTData->actualHours != NULL) //If time is not NULL
+if(array_key_exists("actualHours",$dataTData) && $dataTData->actualHours != NULL) //If time is not NULL
 {
 	$hours="Time: ". $dataTData->actualHours . " Hours"; //Set $hours to a formatted time line.
 }
 
-if($dataTData->resources != NULL)
+if(array_key_exists("resources",$dataTData) && $dataTData->resources != NULL)
 {
 	$resources=$dataTData->resources;
 }
 
-if(!$dataTData->contact==NULL) { //Check if contact name exists in array.
+if(array_key_exists("contact",$dataTData) && !$dataTData->contact==NULL) { //Check if contact name exists in array.
 	$contact = $dataTData->contact->name; //Set contact variable to contact name.
 }
 
@@ -708,7 +809,8 @@ if($command == "initial" || $command == "first" || $command == "note")
 				"text" =>  $dataTData->company->identifier . " / " . $contact . //Return "Company / Contact" string
 				"\n" . $dateformat . " | " . $dataTData->status->name . //Return "Date Entered / Status" string
 				"\n" . $resources . " | " . $hours . //Return assigned resources
-				(!$resourceline ? "" : $resourceline), //Return next resource
+				(!$resourceline ? "" : $resourceline) . //Return next resource
+				$lastupdate,
 				"mrkdwn_in" => array(
 					"text",
 					"pretext"
@@ -728,7 +830,8 @@ if($command == "initial" || $command == "first" || $command == "note")
 				"text" =>  $dataTData->company->identifier . " / " . $contact . //Return "Company / Contact" string
 				"\n" . $dateformat . " | " . $dataTData->status->name . //Return "Date Entered / Status" string
 				"\n" . $resources . " | " . $hours . //Return assigned resources
-				(!$resourceline ? "" : $resourceline), //Return next resource
+				(!$resourceline ? "" : $resourceline) . //Return next resource
+				$lastupdate,
 				"mrkdwn_in" => array(
 					"text",
 					"pretext"
@@ -761,7 +864,8 @@ else if($command == "full" || $command == "notes" || $command == "all")
 				"text" =>  $dataTData->company->identifier . " / " . $contact . //Return "Company / Contact" string
 				"\n" . $dateformat . " | " . $dataTData->status->name . //Return "Date Entered / Status" string
 				"\n" . $resources . " | " . $hours . //Return assigned resources
-				(!$resourceline ? "" : $resourceline), //Return next resource
+				(!$resourceline ? "" : $resourceline) . //Return next resource
+				$lastupdate,
 				"mrkdwn_in" => array(
 					"text",
 					"pretext"
@@ -798,7 +902,8 @@ else if($command == "full" || $command == "notes" || $command == "all")
 				"text" =>  $dataTData->company->identifier . " / " . $contact . //Return "Company / Contact" string
 					"\n" . $dateformat . " | " . $dataTData->status->name . //Return "Date Entered / Status" string
 					"\n" . $resources . " | " . $hours . //Return assigned resources
-					(!$resourceline ? "" : $resourceline), //Return next resource
+					(!$resourceline ? "" : $resourceline) . //Return next resource
+					$lastupdate,
 				"mrkdwn_in" => array(
 					"text",
 					"pretext"
@@ -877,7 +982,8 @@ else //If no command is set, or if it's just random gibberish after ticket numbe
 				"text" =>  $dataTData->company->identifier . " / " . $contact . //Return "Company / Contact" string
 				"\n" . $dateformat . " | " . $dataTData->status->name . //Return "Date Entered / Status" string
 				"\n" . $resources . " | " . $hours . //Return assigned resources
-				(!$resourceline ? "" : $resourceline), //Return next resource
+				(!$resourceline ? "" : $resourceline) . //Return next resource
+				$lastupdate,
 				"mrkdwn_in" => array(
 					"text",
 					"pretext"
@@ -897,7 +1003,8 @@ else //If no command is set, or if it's just random gibberish after ticket numbe
 				"text" =>  $dataTData->company->identifier . " / " . $contact . //Return "Company / Contact" string
 				"\n" . $dateformat . " | " . $dataTData->status->name . //Return "Date Entered / Status" string
 				"\n" . $resources . " | " . $hours . //Return assigned resources
-				(!$resourceline ? "" : $resourceline), //Return next resource
+				(!$resourceline ? "" : $resourceline) . //Return next resource
+				$lastupdate,
 				"mrkdwn_in" => array(
 					"text",
 					"pretext"
@@ -918,7 +1025,7 @@ else //If no command is set, or if it's just random gibberish after ticket numbe
 }
 
 if ($timeoutfix == true) {
-	cURLPost($_GET["response_url"], array("Content-Type: application/json"), "POST", $return);
+	cURLPost($_REQUEST["response_url"], array("Content-Type: application/json"), "POST", $return);
 } else {
 	die(json_encode($return, JSON_PRETTY_PRINT)); //Return properly encoded arrays in JSON for Slack parsing.
 }
